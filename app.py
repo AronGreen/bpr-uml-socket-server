@@ -4,11 +4,13 @@ from flask_cors import CORS
 import settings
 
 app = Flask(__name__)
-cors = CORS(app=app)
+cors = CORS(app=app, origins=[
+    'https://bpr-uml-rest-server.herokuapp.com/',
+    'https://bpr-uml-app.herokuapp.com/'])
 socketio = SocketIO(app)
 
 
-@app.route("/")
+@app.route('/')
 def index():
     return 'Hello, world! running on %s' % request.host 
 
@@ -20,6 +22,5 @@ def handle_source(json_data):
 
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     socketio.run(app, port=settings.PORT)
-    
