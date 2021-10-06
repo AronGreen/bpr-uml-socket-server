@@ -1,13 +1,12 @@
 from flask import Flask, request
 from flask_socketio import SocketIO
-from flask_cors import CORS
-import settings
+# from flask_cors import CORS, cross_origin
 
 app = Flask(__name__)
-cors = CORS(app=app, origins=[
-    'https://bpr-uml-rest-server.herokuapp.com/',
-    'https://bpr-uml-app.herokuapp.com/'])
-socketio = SocketIO(app)
+# CORS(app)
+# cors = CORS(app=app, origins='*', send_wildcard=True)
+
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 @app.route('/')
@@ -21,6 +20,5 @@ def handle_source(json_data):
     socketio.emit('echo', {'echo': 'Server Says: '+text})
 
 
-
 if __name__ == '__main__':
-    socketio.run(app, port=settings.PORT)
+    socketio.run(app)
