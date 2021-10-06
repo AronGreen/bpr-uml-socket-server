@@ -8,7 +8,6 @@ cors = CORS(app=app)
 socketio = SocketIO(app)
 
 
-
 @app.route("/")
 def index():
     return 'Hello, world! running on %s' % request.host 
@@ -23,3 +22,4 @@ def handle_source(json_data):
 
 if __name__ == "__main__":
     socketio.run(app, port=settings.PORT)
+    
