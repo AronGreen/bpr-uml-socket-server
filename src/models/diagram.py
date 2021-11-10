@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 from bson import ObjectId
 
@@ -10,4 +9,5 @@ from src.models.mongo_document_base import MongoDocumentBase
 class Diagram(MongoDocumentBase):
     title: str
     projectId: ObjectId
-    models: list  # representations
+    path: str
+    models: list  # representation object ids
