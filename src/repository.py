@@ -151,6 +151,61 @@ def pull(collection: Collection, document_id: ObjectId, field_name: str, item) -
     return update_result.modified_count > 0
 
 
+def join(
+        local_collection: Collection,
+        local_field: str,
+        foreign_collection: Collection,
+        foreign_field: str,
+        to_field: str,
+        unwind: bool = False,
+        **match_args) -> list:
+    """
+    Returns results from the `local_collection` with the matching documents in the `foreign_collection` as sub-documents.
+
+    Equivalent to a left outer join.
+
+    If `unwind` is True, an unwind step on to_field is added to the pipeline.
+    From MongoDB documentation:
+    "Deconstructs an array field from the input documents to output a document for each element.
+    Each output document is the input document with the value of the array field replaced by the element."
+
+    A filter step will be added to the beginning of the pipeline if filtering arguments are added to `match_args`.
+
+    :param local_collection: collection add sub-documents to
+    :param local_field: field to join on in local collection
+    :param foreign_collection: collection to join
+    :param foreign_field: field to join on in foreign collection
+    :param to_field: field containing the results of the join
+    :param unwind: if true, unwinds on to_field
+    :param match_args: arguments to filter local collection by
+    :return: list of resulting documents
+    """
+
+    if 'id' in match_args:
+        if match_args['id'] is not None:
+            match_args['_id'] = ObjectId(match_args['id'])
+        del match_args['id']
+
+    pipeline = [
+            {
+                '$lookup': {
+                    'from': foreign_collection.value,
+                    'localField': local_field,
+                    'foreignField': foreign_field,
+                    'as': to_field
+                }
+            }
+        ]
+
+    if match_args:
+        pipeline.insert(0, {'$match': match_args})
+    if unwind:
+        pipeline.append({'$unwind': f'${to_field}'})
+
+    result = __get_collection(local_collection).aggregate(pipeline)
+    return list(result)
+
+
 def __get_collection(collection: Collection):
     client = mongo.MongoClient(
         f'{settings.MONGO_PROTOCOL}://{settings.MONGO_USER}:{settings.MONGO_PW}@{settings.MONGO_HOST}/{settings.MONGO_DEFAULT_DB}?retryWrites=true&w=majority')
