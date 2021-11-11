@@ -50,6 +50,11 @@ class ModelRepresentation(MongoDocumentBase):
     h: float
 
 
+@dataclass
+class FullModelRepresentation(ModelRepresentation):
+    model: Model
+
+
 # SUBCLASSES
 # remember to add type field!
 @dataclass

@@ -5,6 +5,7 @@ import requests
 from flask import Flask, request, session
 from flask_socketio import SocketIO, send, emit, disconnect, join_room, rooms
 import settings
+from src.models.model import FullModelRepresentation
 from src.services import diagram_service, model_service
 
 app = Flask(__name__)
@@ -50,8 +51,9 @@ def on_join_diagram(data):
 
             session['room'] = diagram.id.__str__
             join_room(session['room'])
-
-            send('joined_diagram')
+            diagram_models = model_service.get_full_model_representations_for_diagram(diagram.id)
+            if diagram_models:
+                emit('all_diagram_models', FullModelRepresentation.as_json_list(diagram_models))
             emit('user_joined', {'id': session['user']['_id'], 'name': session['user']['name']}, to=session['room'])
 
         else:
@@ -64,10 +66,9 @@ def on_create_model(model, representation):
 
     created = model_service.create(model, representation, session['diagram'])
     if created is None:
-        emit('create_model_error', 'could not create model')
+        send('create_model_error')
         return
-    emit('model_created', created[0].as_json())
-    emit('representation_created', created[1].as_json())
+    emit('model_created', created.as_json(), to=session['room'])
 
 
 # TODO: Make this a middleware
