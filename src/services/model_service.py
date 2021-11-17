@@ -40,17 +40,31 @@ def get_full_model_representations_for_diagram(diagram_id: str | ObjectId) -> li
 
 
 def create(model: dict, representation: dict, diagram: Diagram) -> FullModelRepresentation:
-    model['_id'] = None
-    model['projectId'] = diagram.projectId
-    created_model = Model.parse(db.insert(db.Collection.MODEL, Model.parse(model)))
-
-    representation['_id'] = None
-    representation['modelId'] = created_model.id
-    representation['diagramId'] = diagram.id
-    representation = ModelRepresentation.from_dict(representation)
-    created_representation = ModelRepresentation.from_dict(
-        db.insert(db.Collection.MODEL_REPRESENTATION, representation))
+    created_model = __create_model(model, diagram.projectId)
+    created_representation = __create_representation(representation, created_model.id, diagram.id)
 
     db.push(db.Collection.DIAGRAM, diagram.id, 'models', item=created_representation.id)
 
     return get_full_model_representation(created_representation.id)
+
+
+def add_to_diagram(model_id: str | ObjectId, representation: dict, diagram: Diagram) -> FullModelRepresentation:
+    model = get_model(model_id)
+    created_representation = __create_representation(representation, model.id, diagram.id)
+    return get_full_model_representation(created_representation.id)
+
+
+def __create_model(model: dict, project_id: str | ObjectId):
+    model['_id'] = None
+    model['projectId'] = ObjectId(project_id)
+    return Model.parse(db.insert(db.Collection.MODEL, Model.parse(model)))
+
+
+def __create_representation(representation: dict, model_id: str | ObjectId, diagram_id: str | ObjectId):
+    representation['_id'] = None
+    representation['modelId'] = ObjectId(model_id)
+    representation['diagramId'] = ObjectId(diagram_id)
+    return ModelRepresentation.from_dict(
+        db.insert(db.Collection.MODEL_REPRESENTATION, ModelRepresentation.from_dict(representation)))
+
+

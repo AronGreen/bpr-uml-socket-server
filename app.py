@@ -71,6 +71,18 @@ def on_create_model(model, representation):
     emit('model_created', created.as_json(), to=session['room'])
 
 
+@socketio.on('add_model')
+def on_add_model(model_data, representation):
+    __ensure_client_is_in_room()
+
+    added = model_service.add_to_diagram(model_data['modelId'], representation, session['diagram'])
+
+    if added is None:
+        send('create_model_error')
+        return
+    emit('model_added', added.as_json(), to=session['room'])
+
+
 # TODO: Make this a middleware
 def __ensure_client_is_in_room() -> None:
     if 'room' not in session or session['room'] is None:
@@ -81,30 +93,6 @@ def __ensure_client_is_in_room() -> None:
 def default_error_handler(e):
     send(e.__str__())
     disconnect()
-
-
-#
-# @socketio.on('leave_diagram')
-# def on_leave_diagram(data):
-#     """
-#     username
-#     diagramId
-#     """
-#     username = data['username']
-#     diagram_id = data['projectId']
-#     # TODO: when diagrams are ready, find real project and diagram id
-#     project_id = diagram_id  # diagram_service.find_one(diagram_id).projectId
-#     room = f'{diagram_id}-{project_id}'
-#     leave_room(room)
-#     send(username + ' has left the room.', to=room)
-#
-#
-#
-#
-#
-# @socketio.on('add_model')
-# def on_add_model(diagramId, modelId):
-#     pass
 
 
 # demo
