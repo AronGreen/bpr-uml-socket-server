@@ -1,11 +1,8 @@
-import json
-from enum import Enum
-
 import requests
 from flask import Flask, request, session
 from flask_socketio import SocketIO, send, emit, disconnect, join_room, rooms
 import settings
-from src.models.model import FullModelRepresentation
+from bpr_data.models.model import FullModelRepresentation
 from src.services import diagram_service, model_service
 
 app = Flask(__name__)
