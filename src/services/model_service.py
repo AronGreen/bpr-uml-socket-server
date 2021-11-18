@@ -8,7 +8,6 @@ from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresent
 
 import settings
 
-
 db = Repository.get_instance(
     protocol=settings.MONGO_PROTOCOL,
     default_db=settings.MONGO_DEFAULT_DB,
@@ -64,6 +63,20 @@ def add_to_diagram(model_id: str | ObjectId, representation: dict, diagram: Diag
     return get_full_model_representation(created_representation.id)
 
 
+def update_model_representation(data: dict) -> FullModelRepresentation:
+    if 'modelId' not in data or 'diagramId' not in data:
+        ref_model = db.find_one(Collection.MODEL_REPRESENTATION, id=data['_id'])
+        data['modelId'] = ref_model['modelId']
+        data['diagramId'] = ref_model['diagramId']
+
+    to_update = ModelRepresentation.from_dict(data)
+
+    # may return None if the update makes no changes
+    db.update(Collection.MODEL_REPRESENTATION, to_update)
+
+    return get_full_model_representation(to_update.id)
+
+
 def __create_model(model: dict, project_id: str | ObjectId):
     model['_id'] = None
     model['projectId'] = ObjectId(project_id)
@@ -76,5 +89,3 @@ def __create_representation(representation: dict, model_id: str | ObjectId, diag
     representation['diagramId'] = ObjectId(diagram_id)
     return ModelRepresentation.from_dict(
         db.insert(Collection.MODEL_REPRESENTATION, ModelRepresentation.from_dict(representation)))
-
-
