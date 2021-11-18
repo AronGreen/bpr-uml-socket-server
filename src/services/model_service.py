@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from bson import ObjectId
+from datetime import datetime
 
 from bpr_data.repository import Repository, Collection
 from bpr_data.models.diagram import Diagram
-from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation
+from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateAction, ModelAttribute, \
+    AddAttributeAction, RemoveAttributeAction
+from flask import session
 
 import settings
 
@@ -21,7 +24,7 @@ def get_model(model_id: str) -> Model:
     return Model.parse(model)
 
 
-def get_full_model_representation(representation_id: str) -> FullModelRepresentation:
+def get_full_model_representation(representation_id: str | ObjectId) -> FullModelRepresentation:
     result = db.join(
         local_collection=Collection.MODEL_REPRESENTATION,
         local_field='modelId',
@@ -49,6 +52,8 @@ def get_full_model_representations_for_diagram(diagram_id: str | ObjectId) -> li
 
 
 def create(model: dict, representation: dict, diagram: Diagram) -> FullModelRepresentation:
+    action = CreateAction(timestamp=str(datetime.utcnow()), userId=session['user']['_id'])
+    model['history'] = [action]
     created_model = __create_model(model, diagram.projectId)
     created_representation = __create_representation(representation, created_model.id, diagram.id)
 
@@ -77,9 +82,51 @@ def update_model_representation(data: dict) -> FullModelRepresentation:
     return get_full_model_representation(to_update.id)
 
 
+def add_attribute(
+        model_id: str | ObjectId,
+        representation_id: str | ObjectId,
+        user_id: str | ObjectId,
+        attribute: dict) -> FullModelRepresentation:
+    model = get_model(model_id)
+    if not model.has_field('attributes'):
+        raise TypeError("This model type does not support attributes")
+    attribute['_id'] = ObjectId()
+    model_attribute = ModelAttribute.from_dict(attribute)
+    added = db.push(Collection.MODEL, ObjectId(model_id), 'attributes', model_attribute.as_dict())
+
+    if added:
+        action = AddAttributeAction(
+            timestamp=str(datetime.utcnow()),
+            userId=user_id,
+            attribute=model_attribute.as_dict())
+        db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
+        return get_full_model_representation(representation_id)
+
+
+def remove_attribute(
+        model_id: str | ObjectId,
+        representation_id: str | ObjectId,
+        attribute_id: str | ObjectId,
+        user_id: str | ObjectId):
+    removed = db.pull(Collection.MODEL, ObjectId(model_id), 'attributes', {'_id': ObjectId(attribute_id)})
+
+    if removed:
+        action = RemoveAttributeAction(
+            timestamp=str(datetime.utcnow()),
+            userId=user_id,
+            attributeId=attribute_id)
+        db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
+        return get_full_model_representation(representation_id)
+
+
 def __create_model(model: dict, project_id: str | ObjectId):
     model['_id'] = None
     model['projectId'] = ObjectId(project_id)
+    # TODO: find a more elegant way to enforce this.
+    if model['type'] in ['class'] and 'attributes' not in model:
+        model['attributes'] = []
+    if model['type'] in ['textBox'] and 'text' not in model:
+        model['text'] = ""
     return Model.parse(db.insert(Collection.MODEL, Model.parse(model)))
 
 
