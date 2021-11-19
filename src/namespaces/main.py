@@ -1,3 +1,5 @@
+import json
+
 import requests
 from flask import request, session
 from flask_socketio import send, emit, join_room, Namespace, leave_room
@@ -17,11 +19,12 @@ class MainNamespace(Namespace):
             raise ConnectionRefusedError('unauthorized!')
         else:
             session['user'] = response.json()
+            session['user']['id'] = str(session['user']['_id'])
             emit(
                 'connection_response',
-                {
+                json.dumps({
                     'success': True,
-                })
+                }, default=str))
 
     def on_join_diagram(self, data):
         if 'diagramId' in data:
@@ -36,10 +39,10 @@ class MainNamespace(Namespace):
                 diagram_models = model_service.get_full_model_representations_for_diagram(diagram.id)
 
                 emit('all_diagram_models',
-                     FullModelRepresentation.as_dict_list(diagram_models))
+                     FullModelRepresentation.as_json_list(diagram_models))
 
                 emit('user_joined',
-                     {'id': session['user']['_id'], 'name': session['user']['name']},
+                     json.dumps({'id': session['user']['id'], 'name': session['user']['name']}, default=str),
                      to=session['room'])
             else:
                 send('diagram_not_found')
@@ -47,7 +50,7 @@ class MainNamespace(Namespace):
     def on_leave_diagram(self):
         session['diagram'] = None
         emit('user_left',
-             {'id': session['user']['_id'], 'name': session['user']['name']},
+             json.dumps({'id': session['user']['id'], 'name': session['user']['name']}, default=str),
              to=session['room'])
         leave_room(session['room'])
         session['room'] = ''
@@ -59,7 +62,7 @@ class MainNamespace(Namespace):
         if created is None:
             send('create_model_error')
             return
-        emit('model_created', created.as_dict(), to=session['room'])
+        emit('model_created', created.as_json(), to=session['room'])
 
     def on_add_model(self, model_data, representation):
         self.__ensure_client_is_in_room()
@@ -69,7 +72,7 @@ class MainNamespace(Namespace):
         if added is None:
             send('create_model_error')
             return
-        emit('model_added', added.as_dict(), to=session['room'])
+        emit('model_added', added.as_json(), to=session['room'])
 
     def on_update_model_representation(self, data):
         self.__ensure_client_is_in_room()
@@ -79,7 +82,7 @@ class MainNamespace(Namespace):
         if updated is None:
             send('update_model_error')
             return
-        emit('model_updated', updated.as_dict(), to=session['room'])
+        emit('model_updated', updated.as_json(), to=session['room'])
 
     def on_add_model_attribute(self, references, attribute):
         self.__ensure_client_is_in_room()
@@ -93,7 +96,7 @@ class MainNamespace(Namespace):
         if updated is None:
             send('update_model_error')
             return
-        emit('model_updated', updated.as_dict(), to=session['room'])
+        emit('model_updated', updated.as_json(), to=session['room'])
 
     def on_remove_model_attribute(self, references):
         self.__ensure_client_is_in_room()
@@ -108,7 +111,7 @@ class MainNamespace(Namespace):
         if updated is None:
             send('update_model_error')
             return
-        emit('model_updated', updated.as_dict(), to=session['room'])
+        emit('model_updated', updated.as_json(), to=session['room'])
 
     @staticmethod
     def __ensure_client_is_in_room() -> None:
