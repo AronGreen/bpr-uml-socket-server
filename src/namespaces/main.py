@@ -32,7 +32,7 @@ class MainNamespace(Namespace):
 
             if diagram is not None:
                 session['diagram'] = diagram
-                session['room'] = diagram.id.__str__
+                session['room'] = str(diagram.id)
 
                 join_room(session['room'])
 
