@@ -5,8 +5,8 @@ from datetime import datetime
 
 from bpr_data.repository import Repository, Collection
 from bpr_data.models.diagram import Diagram
-from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateAction, ModelAttribute, \
-    AddAttributeAction, RemoveAttributeAction
+from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateAction, ModelField, \
+    AddFieldAction, RemoveFieldAction
 from flask import session
 
 import settings
@@ -82,39 +82,39 @@ def update_model_representation(data: dict) -> FullModelRepresentation:
     return get_full_model_representation(to_update.id)
 
 
-def add_attribute(
+def add_field(
         model_id: str | ObjectId,
         representation_id: str | ObjectId,
         user_id: str | ObjectId,
-        attribute: dict) -> FullModelRepresentation:
+        field: dict) -> FullModelRepresentation:
     model = get_model(model_id)
-    if not model.has_field('attributes'):
-        raise TypeError("This model type does not support attributes")
-    attribute['_id'] = ObjectId()
-    model_attribute = ModelAttribute.from_dict(attribute)
-    added = db.push(Collection.MODEL, ObjectId(model_id), 'attributes', model_attribute.as_dict())
+    if not model.has_field('fields'):
+        raise TypeError("This model type does not support fields")
+    field['_id'] = ObjectId()
+    model_field = ModelField.from_dict(field)
+    added = db.push(Collection.MODEL, ObjectId(model_id), 'fields', model_field.as_dict())
 
     if added:
-        action = AddAttributeAction(
+        action = AddFieldAction(
             timestamp=str(datetime.utcnow()),
             userId=user_id,
-            attribute=model_attribute.as_dict())
+            field=model_field.as_dict())
         db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
         return get_full_model_representation(representation_id)
 
 
-def remove_attribute(
+def remove_field(
         model_id: str | ObjectId,
         representation_id: str | ObjectId,
-        attribute_id: str | ObjectId,
+        field_id: str | ObjectId,
         user_id: str | ObjectId):
-    removed = db.pull(Collection.MODEL, ObjectId(model_id), 'attributes', {'_id': ObjectId(attribute_id)})
+    removed = db.pull(Collection.MODEL, ObjectId(model_id), 'fields', {'_id': ObjectId(field_id)})
 
     if removed:
-        action = RemoveAttributeAction(
+        action = RemoveFieldAction(
             timestamp=str(datetime.utcnow()),
             userId=user_id,
-            attributeId=attribute_id)
+            fieldId=field_id)
         db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
         return get_full_model_representation(representation_id)
 
@@ -123,8 +123,10 @@ def __create_model(model: dict, project_id: str | ObjectId):
     model['_id'] = None
     model['projectId'] = ObjectId(project_id)
     # TODO: find a more elegant way to enforce this.
-    if model['type'] in ['class'] and 'attributes' not in model:
-        model['attributes'] = []
+    if model['type'] in ['class'] and 'fields' not in model:
+        model['fields'] = []
+    if model['type'] in ['class'] and 'methods' not in model:
+        model['methods'] = []
     if model['type'] in ['textBox'] and 'text' not in model:
         model['text'] = ""
     return Model.parse(db.insert(Collection.MODEL, Model.parse(model)))
@@ -136,3 +138,4 @@ def __create_representation(representation: dict, model_id: str | ObjectId, diag
     representation['diagramId'] = ObjectId(diagram_id)
     return ModelRepresentation.from_dict(
         db.insert(Collection.MODEL_REPRESENTATION, ModelRepresentation.from_dict(representation)))
+

@@ -84,27 +84,27 @@ class MainNamespace(Namespace):
             return
         emit('model_updated', updated.as_json(), to=session['room'])
 
-    def on_add_model_attribute(self, references, attribute):
+    def on_add_model_field(self, references, field):
         self.__ensure_client_is_in_room()
 
-        updated = model_service.add_attribute(
+        updated = model_service.add_field(
             model_id=references['modelId'],
             representation_id=references['modelRepresentationId'],
             user_id=session['user']['_id'],
-            attribute=attribute)
+            field=field)
 
         if updated is None:
             send('update_model_error')
             return
         emit('model_updated', updated.as_json(), to=session['room'])
 
-    def on_remove_model_attribute(self, references):
+    def on_remove_model_field(self, references):
         self.__ensure_client_is_in_room()
 
-        updated = model_service.remove_attribute(
+        updated = model_service.remove_field(
             model_id=references['modelId'],
             representation_id=references['modelRepresentationId'],
-            attribute_id=references['attributeId'],
+            field_id=references['fieldId'],
             user_id=session['user']['_id']
         )
 
