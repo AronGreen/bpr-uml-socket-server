@@ -6,7 +6,7 @@ from typing import Union
 from bpr_data.models.diagram import Diagram
 from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateModelAction, \
     AddAttributeAction, AttributeType, RemoveAttributeAction, HistoryActionType, SetAttributeAction, \
-    AttributeBase
+    AttributeBase, Relation
 from bpr_data.repository import Repository, Collection
 from bson import ObjectId
 
@@ -145,11 +145,33 @@ def __construct_attribute(d: dict) -> AttributeType:
     return AttributeBase.parse(d, True)
 
 
+def __construct_relation(d: dict) -> AttributeType:
+    # ensure that an id is present
+    # if existing _id, ensure that it is ObjectId
+    if '_id' not in d:
+        d['_id'] = ObjectId()
+    else:
+        d['_id'] = ObjectId(d['_id'])
+
+    return Relation.from_dict(d, True)
+
+
 def __create_model(model: dict, project_id: MongoId, user_id: MongoId) -> Model:
     model['_id'] = None
     model['projectId'] = ObjectId(project_id)
-    model['relations'] = []
-    model['attributes'] = []
+
+    if 'attributes' in model:
+        attributes = [__construct_attribute(a) for a in model['attributes']]
+        model['attributes'] = attributes
+    else:
+        model['attributes'] = []
+
+    if 'relations' in model:
+        relations = [__construct_relation(r) for r in model['relations']]
+        model['relations'] = relations
+    else:
+        model['relations'] = []
+
     action = CreateModelAction(timestamp=str(datetime.utcnow()), userId=ObjectId(user_id))
     model['history'] = [action]
     return db.insert(Collection.MODEL, Model.from_dict(model), return_type=Model)

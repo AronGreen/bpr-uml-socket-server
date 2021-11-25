@@ -1,5 +1,7 @@
+import time
+
 from flask import Flask, request
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, disconnect
 
 import settings
 from src.namespaces.main import MainNamespace
@@ -19,10 +21,11 @@ def index():
 @socket_io.on_error_default
 def default_error_handler(e):
     if isinstance(e, ConnectionRefusedError):
-        emit('error', {'error_type': 'connection', 'error': e.__str__()})
+        # for some reason, events emitted right before disconnect() are not received, so commenting this for now
+        # emit('error', {'error_type': 'connection', 'error': e.__str__()})
+        disconnect()
     else:
         emit('error', {'error_type': 'general', 'error': e.__str__()})
-        # disconnect()
 
 
 # demo

@@ -1,12 +1,13 @@
 import json
-from typing import Callable, TypeVar, Type, Any
+from typing import Callable, TypeVar, Any
+
 import requests
-from bpr_data.models.mongo_document_base import SerializableObject, MongoDocumentBase
+from bpr_data.models.model import FullModelRepresentation
+from bpr_data.models.mongo_document_base import SerializableObject
 from flask import request, session
-from flask_socketio import send, emit, join_room, Namespace, leave_room
+from flask_socketio import emit, join_room, Namespace, leave_room
 
 import settings
-from bpr_data.models.model import FullModelRepresentation
 from src.services import diagram_service, model_service
 
 
@@ -47,7 +48,7 @@ class MainNamespace(Namespace):
                      json.dumps({'id': session['user']['id'], 'name': session['user']['name']}, default=str),
                      to=session['room'])
             else:
-                send('diagram_not_found')
+                emit('error', {'error_type': 'diagram_not_found'})
 
     def on_leave_diagram(self):
         session['diagram'] = None
@@ -59,7 +60,7 @@ class MainNamespace(Namespace):
 
     def on_create_model(self, model, representation):
         self.__ensure_client_is_in_room()
-        if self.__validate_create_model(model) and self.__validate(representation, ['x', 'y', 'w', 'h']):
+        if self.__validate(model, ['type', 'path']) and self.__validate(representation, ['x', 'y', 'w', 'h']):
             self.__handle_model_add(model_service.create,
                                     model=model,
                                     representation=representation,
@@ -135,15 +136,6 @@ class MainNamespace(Namespace):
     def __ensure_client_is_in_room() -> None:
         if 'room' not in session or session['room'] is None:
             raise ConnectionRefusedError('please join a diagram before taking this action!')
-
-    def __validate_create_model(self, to_check: dict) -> bool:
-        if 'type' not in to_check:
-            emit('error', {'error_type': 'missingParameters', 'message': 'model must have `type` field'})
-            return False
-        if to_check['type'] == 'class':
-            return self.__validate(to_check, ['type', 'path', 'name'])
-        if to_check['type'] == 'textBox':
-            return self.__validate(to_check, ['type', 'path', 'text'])
 
     def __validate_attribute(self, to_check: dict) -> bool:
         if 'kind' not in to_check:
