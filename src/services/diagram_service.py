@@ -6,12 +6,7 @@ from bpr_data.models.diagram import Diagram
 import settings
 
 
-db = Repository.get_instance(
-    protocol=settings.MONGO_PROTOCOL,
-    default_db=settings.MONGO_DEFAULT_DB,
-    pw=settings.MONGO_PW,
-    host=settings.MONGO_HOST,
-    user=settings.MONGO_USER)
+db = Repository.get_instance(**settings.MONGO_CONN)
 
 
 def get_diagram(diagram_id: str) -> Diagram:

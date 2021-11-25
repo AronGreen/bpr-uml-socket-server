@@ -1,30 +1,29 @@
 from __future__ import annotations
 
-from bson import ObjectId
 from datetime import datetime
+from typing import Union
 
-from bpr_data.repository import Repository, Collection
 from bpr_data.models.diagram import Diagram
-from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateAction, ModelField, \
-    AddFieldAction, RemoveFieldAction
-from flask import session
+from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateModelAction, \
+    AddAttributeAction, AttributeType, RemoveAttributeAction, HistoryActionType, SetAttributeAction, \
+    AttributeBase
+from bpr_data.repository import Repository, Collection
+from bson import ObjectId
 
 import settings
 
-db = Repository.get_instance(
-    protocol=settings.MONGO_PROTOCOL,
-    default_db=settings.MONGO_DEFAULT_DB,
-    pw=settings.MONGO_PW,
-    host=settings.MONGO_HOST,
-    user=settings.MONGO_USER)
+db = Repository.get_instance(**settings.MONGO_CONN)
+
+# TODO: Move to data module
+MongoId = Union[ObjectId, str]
 
 
-def get_model(model_id: str) -> Model:
+def get_model(model_id: MongoId) -> Model:
     model = db.find_one(Collection.MODEL, id=model_id)
-    return Model.parse(model)
+    return Model.from_dict(model, True)
 
 
-def get_full_model_representation(representation_id: str | ObjectId) -> FullModelRepresentation:
+def get_full_model_representation(representation_id: MongoId) -> FullModelRepresentation:
     result = db.join(
         local_collection=Collection.MODEL_REPRESENTATION,
         local_field='modelId',
@@ -51,14 +50,10 @@ def get_full_model_representations_for_diagram(diagram_id: str | ObjectId) -> li
     return FullModelRepresentation.from_dict_list(result)
 
 
-def create(model: dict, representation: dict, diagram: Diagram) -> FullModelRepresentation:
-    action = CreateAction(timestamp=str(datetime.utcnow()), userId=session['user']['_id'])
-    model['history'] = [action]
-    created_model = __create_model(model, diagram.projectId)
+def create(model: dict, representation: dict, diagram: Diagram, user_id: MongoId) -> FullModelRepresentation:
+    created_model = __create_model(model, diagram.projectId, user_id)
     created_representation = __create_representation(representation, created_model.id, diagram.id)
-
     db.push(Collection.DIAGRAM, diagram.id, 'models', item=created_representation.id)
-
     return get_full_model_representation(created_representation.id)
 
 
@@ -76,60 +71,88 @@ def update_model_representation(data: dict) -> FullModelRepresentation:
 
     to_update = ModelRepresentation.from_dict(data)
 
-    # may return None if the update makes no changes
     db.update(Collection.MODEL_REPRESENTATION, to_update)
 
     return get_full_model_representation(to_update.id)
 
 
-def add_field(
-        model_id: str | ObjectId,
-        representation_id: str | ObjectId,
-        user_id: str | ObjectId,
-        field: dict) -> FullModelRepresentation:
-    model = get_model(model_id)
-    if not model.has_field('fields'):
-        raise TypeError("This model type does not support fields")
-    field['_id'] = ObjectId()
-    model_field = ModelField.from_dict(field)
-    added = db.push(Collection.MODEL, ObjectId(model_id), 'fields', model_field.as_dict())
+def add_attribute(model_id: MongoId,
+                  representation_id: MongoId,
+                  user_id: MongoId,
+                  attribute: dict) -> FullModelRepresentation:
+    attr = __construct_attribute(attribute)
+    added = db.push(Collection.MODEL, ObjectId(model_id), 'attributes', attr.as_dict())
 
     if added:
-        action = AddFieldAction(
-            timestamp=str(datetime.utcnow()),
-            userId=user_id,
-            field=model_field.as_dict())
+        action = AddAttributeAction(item=attr,
+                                    timestamp=str(datetime.utcnow()),
+                                    userId=ObjectId(user_id))
         db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
         return get_full_model_representation(representation_id)
 
 
-def remove_field(
-        model_id: str | ObjectId,
-        representation_id: str | ObjectId,
-        field_id: str | ObjectId,
-        user_id: str | ObjectId):
-    removed = db.pull(Collection.MODEL, ObjectId(model_id), 'fields', {'_id': ObjectId(field_id)})
+def remove_attribute(model_id: MongoId,
+                     representation_id: MongoId,
+                     attribute_id: MongoId,
+                     user_id: MongoId) -> FullModelRepresentation:
+    removed = db.pull(Collection.MODEL, ObjectId(model_id), 'attributes', {'_id': ObjectId(attribute_id)})
 
     if removed:
-        action = RemoveFieldAction(
-            timestamp=str(datetime.utcnow()),
-            userId=user_id,
-            fieldId=field_id)
-        db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
+        action = RemoveAttributeAction(timestamp=str(datetime.utcnow()),
+                                       userId=ObjectId(user_id),
+                                       itemId=ObjectId(attribute_id))
+        __add_to_history(model_id, action)
         return get_full_model_representation(representation_id)
 
 
-def __create_model(model: dict, project_id: str | ObjectId):
+def set_attribute(model_id: MongoId,
+                  representation_id: MongoId,
+                  user_id: MongoId,
+                  attribute: dict) -> FullModelRepresentation:
+    if '_id' not in attribute:
+        raise KeyError("missing _id field on attribute")
+
+    model = get_model(model_id)
+    new_attr = __construct_attribute(attribute)
+    old_attr = next((AttributeBase.parse(a, True) for a in model.attributes if a['_id'] == new_attr.id), None)
+
+    if old_attr is not None and old_attr != new_attr:
+        action = SetAttributeAction(oldItem=old_attr,
+                                    newItem=new_attr,
+                                    userId=ObjectId(user_id),
+                                    timestamp=str(datetime.utcnow()))
+        __add_to_history(ObjectId(model_id), action)
+        db.update_list_item(collection=Collection.MODEL,
+                            document_id=ObjectId(model_id),
+                            field_name='attributes',
+                            field_query={'attributes._id': new_attr.id},
+                            item=new_attr)
+        return get_full_model_representation(representation_id)
+
+
+def __add_to_history(model_id: MongoId, action: HistoryActionType):
+    db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
+
+
+def __construct_attribute(d: dict) -> AttributeType:
+    # ensure that an id is present
+    # if existing _id, ensure that it is ObjectId
+    if '_id' not in d:
+        d['_id'] = ObjectId()
+    else:
+        d['_id'] = ObjectId(d['_id'])
+
+    return AttributeBase.parse(d, True)
+
+
+def __create_model(model: dict, project_id: MongoId, user_id: MongoId) -> Model:
     model['_id'] = None
     model['projectId'] = ObjectId(project_id)
-    # TODO: find a more elegant way to enforce this.
-    if model['type'] in ['class'] and 'fields' not in model:
-        model['fields'] = []
-    if model['type'] in ['class'] and 'methods' not in model:
-        model['methods'] = []
-    if model['type'] in ['textBox'] and 'text' not in model:
-        model['text'] = ""
-    return Model.parse(db.insert(Collection.MODEL, Model.parse(model)))
+    model['relations'] = []
+    model['attributes'] = []
+    action = CreateModelAction(timestamp=str(datetime.utcnow()), userId=ObjectId(user_id))
+    model['history'] = [action]
+    return db.insert(Collection.MODEL, Model.from_dict(model), return_type=Model)
 
 
 def __create_representation(representation: dict, model_id: str | ObjectId, diagram_id: str | ObjectId):
@@ -138,4 +161,3 @@ def __create_representation(representation: dict, model_id: str | ObjectId, diag
     representation['diagramId'] = ObjectId(diagram_id)
     return ModelRepresentation.from_dict(
         db.insert(Collection.MODEL_REPRESENTATION, ModelRepresentation.from_dict(representation)))
-
