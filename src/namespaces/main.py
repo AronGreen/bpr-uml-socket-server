@@ -112,6 +112,27 @@ class MainNamespace(Namespace):
                 user_id=session['user']['_id'],
                 attribute=attribute)
 
+    def on_add_model_relation(self, references, relation):
+        self.__ensure_client_is_in_room()
+        if self.__validate(references, ['modelId', 'modelRepresentationId']) \
+                and self.__validate(relation, ['target']):
+            self.__handle_model_update(
+                model_service.add_relation,
+                model_id=references['modelId'],
+                representation_id=references['modelRepresentationId'],
+                user_id=session['user']['_id'],
+                relation=relation)
+
+    def on_remove_model_relation(self, references):
+        self.__ensure_client_is_in_room()
+        if self.__validate(references, ['modelId', 'modelRepresentationId', 'relationId']):
+            self.__handle_model_update(
+                model_service.remove_relation,
+                model_id=references['modelId'],
+                representation_id=references['modelRepresentationId'],
+                relation_id=references['relationId'],
+                user_id=session['user']['_id'])
+
     # TODO: Move to mongo_document_base in data module
     SOType = TypeVar('SOType', bound=SerializableObject)
 

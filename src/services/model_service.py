@@ -6,7 +6,7 @@ from typing import Union
 from bpr_data.models.diagram import Diagram
 from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateModelAction, \
     AddAttributeAction, AttributeType, RemoveAttributeAction, HistoryActionType, SetAttributeAction, \
-    AttributeBase, Relation
+    AttributeBase, Relation, AddRelationAction, RemoveRelationAction
 from bpr_data.repository import Repository, Collection
 from bson import ObjectId
 
@@ -127,6 +127,35 @@ def set_attribute(model_id: MongoId,
                             field_name='attributes',
                             field_query={'attributes._id': new_attr.id},
                             item=new_attr)
+        return get_full_model_representation(representation_id)
+
+
+def add_relation(model_id: MongoId,
+                 representation_id: MongoId,
+                 user_id: MongoId,
+                 relation: dict) -> FullModelRepresentation:
+    rel = __construct_relation(relation)
+    added = db.push(Collection.MODEL, ObjectId(model_id), 'relations', rel.as_dict())
+
+    if added:
+        action = AddRelationAction(item=rel,
+                                   timestamp=str(datetime.utcnow()),
+                                   userId=ObjectId(user_id))
+        db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
+        return get_full_model_representation(representation_id)
+
+
+def remove_relation(model_id: MongoId,
+                    representation_id: MongoId,
+                    relation_id: MongoId,
+                    user_id: MongoId) -> FullModelRepresentation:
+    removed = db.pull(Collection.MODEL, ObjectId(model_id), 'relations', {'_id': ObjectId(relation_id)})
+
+    if removed:
+        action = RemoveRelationAction(timestamp=str(datetime.utcnow()),
+                                      userId=ObjectId(user_id),
+                                      itemId=ObjectId(relation_id))
+        __add_to_history(model_id, action)
         return get_full_model_representation(representation_id)
 
 
