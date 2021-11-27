@@ -23,7 +23,7 @@ def default_error_handler(e):
         # emit('error', {'error_type': 'connection', 'error': e.__str__()})
         disconnect()
     else:
-        emit('error', {'error_type': 'general', 'error': e.__str__()})
+        emit('error', {'error_type': 'general', 'error': e.__repr__()})
 
 
 # demo

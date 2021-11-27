@@ -5,8 +5,8 @@ from typing import Union
 
 from bpr_data.models.diagram import Diagram
 from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateModelAction, \
-    AddAttributeAction, AttributeType, RemoveAttributeAction, HistoryActionType, SetAttributeAction, \
-    AttributeBase, Relation, AddRelationAction, RemoveRelationAction, RelationRepresentation
+    AddAttributeAction, AttributeType, RemoveAttributeAction, HistoryActionType, UpdateAttributeAction, \
+    AttributeBase, Relation, CreateRelationAction, RemoveRelationAction, RelationRepresentation
 from bpr_data.repository import Repository, Collection
 from bson import ObjectId
 
@@ -83,13 +83,12 @@ def add_attribute(model_id: MongoId,
                   user_id: MongoId,
                   attribute: dict) -> FullModelRepresentation:
     attr = __construct_attribute(attribute)
-    added = db.push(Collection.MODEL, ObjectId(model_id), 'attributes', attr.as_dict())
+    success = db.push(Collection.MODEL, ObjectId(model_id), 'attributes', attr.as_dict())
 
-    if added:
-        action = AddAttributeAction(item=attr,
-                                    timestamp=str(datetime.utcnow()),
-                                    userId=ObjectId(user_id))
-        db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
+    if success:
+        __add_to_history(model_id,
+                         AddAttributeAction(item=attr, timestamp=str(datetime.utcnow()), userId=ObjectId(user_id)))
+
         return get_full_model_representation(representation_id)
 
 
@@ -97,13 +96,11 @@ def remove_attribute(model_id: MongoId,
                      representation_id: MongoId,
                      attribute_id: MongoId,
                      user_id: MongoId) -> FullModelRepresentation:
-    removed = db.pull(Collection.MODEL, ObjectId(model_id), 'attributes', {'_id': ObjectId(attribute_id)})
+    success = db.pull(Collection.MODEL, ObjectId(model_id), 'attributes', {'_id': ObjectId(attribute_id)})
 
-    if removed:
-        action = RemoveAttributeAction(timestamp=str(datetime.utcnow()),
-                                       userId=ObjectId(user_id),
-                                       itemId=ObjectId(attribute_id))
-        __add_to_history(model_id, action)
+    if success:
+        __add_to_history(model_id, RemoveAttributeAction(timestamp=str(datetime.utcnow()), userId=ObjectId(user_id),
+                                                         itemId=ObjectId(attribute_id)))
         return get_full_model_representation(representation_id)
 
 
@@ -112,23 +109,23 @@ def update_attribute(model_id: MongoId,
                      user_id: MongoId,
                      attribute: dict) -> FullModelRepresentation:
     if '_id' not in attribute:
-        raise KeyError("missing _id field on attribute")
+        raise MissingPropertyException(prop='_id')
 
     model = get_model(model_id)
     new_attr = __construct_attribute(attribute)
     old_attr = next((AttributeBase.parse(a, True) for a in model.attributes if a['_id'] == new_attr.id), None)
 
     if old_attr is not None and old_attr != new_attr:
-        action = SetAttributeAction(oldItem=old_attr,
-                                    newItem=new_attr,
-                                    userId=ObjectId(user_id),
-                                    timestamp=str(datetime.utcnow()))
-        __add_to_history(ObjectId(model_id), action)
+        __add_to_history(ObjectId(model_id),
+                         UpdateAttributeAction(oldItem=old_attr, newItem=new_attr, userId=ObjectId(user_id),
+                                               timestamp=str(datetime.utcnow())))
+
         db.update_list_item(collection=Collection.MODEL,
                             document_id=ObjectId(model_id),
                             field_name='attributes',
                             field_query={'attributes._id': new_attr.id},
                             item=new_attr)
+
         return get_full_model_representation(representation_id)
 
 
@@ -137,16 +134,16 @@ def create_relation(model_id: MongoId,
                     user_id: MongoId,
                     relation_target: MongoId) -> FullModelRepresentation:
     relation = __construct_relation({'target': ObjectId(relation_target)})
-    db.push(Collection.MODEL, ObjectId(model_id), 'relations', relation.as_dict())
+    success = db.push(Collection.MODEL, ObjectId(model_id), 'relations', relation.as_dict())
 
-    relation_rep = RelationRepresentation.from_dict({'_id': ObjectId(), 'relationId': relation.id})
-    db.push(Collection.MODEL_REPRESENTATION, ObjectId(representation_id), 'relations', relation_rep.as_dict())
+    if success:
+        relation_rep = RelationRepresentation.from_dict({'_id': ObjectId(), 'relationId': relation.id})
+        db.push(Collection.MODEL_REPRESENTATION, ObjectId(representation_id), 'relations', relation_rep.as_dict())
 
-    action = AddRelationAction(item=relation,
-                               timestamp=str(datetime.utcnow()),
-                               userId=ObjectId(user_id))
-    db.push(Collection.MODEL, ObjectId(model_id), 'history', action.as_dict())
-    return get_full_model_representation(representation_id)
+        __add_to_history(model_id, CreateRelationAction(item=relation, timestamp=str(datetime.utcnow()),
+                                                        userId=ObjectId(user_id)))
+
+        return get_full_model_representation(representation_id)
 
 
 def update_relation(model_id: MongoId,
@@ -154,12 +151,14 @@ def update_relation(model_id: MongoId,
                     user_id: MongoId,
                     relation: dict) -> FullModelRepresentation:
     if '_id' not in relation:
-        raise MissingPropertyException(property='_id')
+        raise MissingPropertyException(prop='_id')
+
     model = get_model(model_id)
-    if next((r for r in model.relations if r if r['_id'] == relation['_id']), None):
-        raise ListItemNotFoundException(document_id=model.id,
-                                        list_field='relation',
+
+    if next((r for r in model.relations if str(r['_id']) == str(relation['_id'])), None) is None:
+        raise ListItemNotFoundException(document_id=model.id, list_field='relation',
                                         item_identifier=f'_id={relation["_id"]}')
+
     updated_rel = __construct_relation(relation)
     db.update_list_item(collection=Collection.MODEL,
                         document_id=ObjectId(model_id),
@@ -170,10 +169,10 @@ def update_relation(model_id: MongoId,
 
 
 def delete_relation(model_id: MongoId,
-            representation_id: MongoId,
-            relation_id: MongoId,
-            deep: bool,
-            user_id: MongoId):
+                    representation_id: MongoId,
+                    relation_id: MongoId,
+                    deep: bool,
+                    user_id: MongoId):
     db.pull(Collection.MODEL_REPRESENTATION,
             ObjectId(representation_id),
             'relations',
