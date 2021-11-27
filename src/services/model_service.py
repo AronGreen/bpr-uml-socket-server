@@ -6,7 +6,7 @@ from typing import Union
 from bpr_data.models.diagram import Diagram
 from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateModelAction, \
     AddAttributeAction, AttributeType, RemoveAttributeAction, HistoryActionType, UpdateAttributeAction, \
-    AttributeBase, Relation, CreateRelationAction, RemoveRelationAction, RelationRepresentation
+    AttributeBase, Relation, CreateRelationAction, RemoveRelationAction, RelationRepresentation, UpdateRelationAction
 from bpr_data.repository import Repository, Collection
 from bson import ObjectId
 
@@ -155,7 +155,8 @@ def update_relation(model_id: MongoId,
 
     model = get_model(model_id)
 
-    if next((r for r in model.relations if str(r['_id']) == str(relation['_id'])), None) is None:
+    old_rel = next((r for r in model.relations if str(r['_id']) == str(relation['_id'])), None)
+    if old_rel is None:
         raise ListItemNotFoundException(document_id=model.id, list_field='relation',
                                         item_identifier=f'_id={relation["_id"]}')
 
@@ -165,6 +166,11 @@ def update_relation(model_id: MongoId,
                         field_name='relations',
                         field_query={'relations._id': updated_rel.id},
                         item=updated_rel)
+
+    __add_to_history(model_id,
+                     UpdateRelationAction(timestamp=str(datetime.utcnow()), userId=ObjectId(user_id), oldItem=old_rel,
+                                          newItem=updated_rel))
+
     return get_full_model_representation(representation_id)
 
 
@@ -180,10 +186,9 @@ def delete_relation(model_id: MongoId,
 
     if deep:
         db.pull(Collection.MODEL, ObjectId(model_id), 'relations', {'_id': ObjectId(relation_id)})
-        # action = RemoveRelationAction(timestamp=str(datetime.utcnow()),
-        #                               userId=ObjectId(user_id),
-        #                               itemId=ObjectId(relation_id))
-        # __add_to_history(model_id, action)
+        __add_to_history(model_id, RemoveRelationAction(timestamp=str(datetime.utcnow()), userId=ObjectId(user_id),
+                                                        itemId=ObjectId(relation_id)))
+
     return get_full_model_representation(representation_id)
 
 
