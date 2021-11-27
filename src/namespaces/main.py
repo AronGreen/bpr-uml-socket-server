@@ -29,6 +29,11 @@ class MainNamespace(Namespace):
                     'success': True,
                 }, default=str))
 
+    def on_disconnect(self):
+        emit('user_left',
+             json.dumps({'id': session['user']['id'], 'name': session['user']['name']}, default=str),
+             to=session['room'])
+
     def on_join_diagram(self, data):
         if 'diagramId' in data:
             diagram = diagram_service.get_diagram(data['diagramId'])
@@ -84,54 +89,60 @@ class MainNamespace(Namespace):
         self.__ensure_client_is_in_room()
         if self.__validate(references, ['modelId', 'modelRepresentationId']) \
                 and self.__validate_attribute(attribute):
-            self.__handle_model_update(
-                model_service.add_attribute,
-                model_id=references['modelId'],
-                representation_id=references['modelRepresentationId'],
-                user_id=session['user']['_id'],
-                attribute=attribute)
+            self.__handle_model_update(model_service.add_attribute,
+                                       model_id=references['modelId'],
+                                       representation_id=references['modelRepresentationId'],
+                                       user_id=session['user']['_id'],
+                                       attribute=attribute)
 
     def on_remove_model_attribute(self, references):
         self.__ensure_client_is_in_room()
         if self.__validate(references, ['modelId', 'modelRepresentationId', 'attributeId']):
-            self.__handle_model_update(
-                model_service.remove_attribute,
-                model_id=references['modelId'],
-                representation_id=references['modelRepresentationId'],
-                attribute_id=references['attributeId'],
-                user_id=session['user']['_id'])
+            self.__handle_model_update(model_service.remove_attribute,
+                                       model_id=references['modelId'],
+                                       representation_id=references['modelRepresentationId'],
+                                       attribute_id=references['attributeId'],
+                                       user_id=session['user']['_id'])
 
-    def on_set_model_attribute(self, references, attribute):
+    def on_update_model_attribute(self, references, attribute):
         self.__ensure_client_is_in_room()
         if self.__validate(references, ['modelId', 'modelRepresentationId']) \
                 and self.__validate_attribute(attribute):
-            self.__handle_model_update(
-                model_service.set_attribute,
-                model_id=references['modelId'],
-                representation_id=references['modelRepresentationId'],
-                user_id=session['user']['_id'],
-                attribute=attribute)
+            self.__handle_model_update(model_service.update_attribute,
+                                       model_id=references['modelId'],
+                                       representation_id=references['modelRepresentationId'],
+                                       user_id=session['user']['_id'],
+                                       attribute=attribute)
 
-    def on_add_model_relation(self, references, relation):
+    def on_create_model_relation(self, references, relation):
         self.__ensure_client_is_in_room()
         if self.__validate(references, ['modelId', 'modelRepresentationId']) \
                 and self.__validate(relation, ['target']):
-            self.__handle_model_update(
-                model_service.add_relation,
-                model_id=references['modelId'],
-                representation_id=references['modelRepresentationId'],
-                user_id=session['user']['_id'],
-                relation=relation)
+            self.__handle_model_update(model_service.create_relation,
+                                       model_id=references['modelId'],
+                                       representation_id=references['modelRepresentationId'],
+                                       user_id=session['user']['_id'],
+                                       relation_target=relation['target'])
 
-    def on_remove_model_relation(self, references):
+    def on_update_model_relation(self, references, relation):
         self.__ensure_client_is_in_room()
-        if self.__validate(references, ['modelId', 'modelRepresentationId', 'relationId']):
-            self.__handle_model_update(
-                model_service.remove_relation,
-                model_id=references['modelId'],
-                representation_id=references['modelRepresentationId'],
-                relation_id=references['relationId'],
-                user_id=session['user']['_id'])
+        if self.__validate(references, ['modelId', 'modelRepresentationId']) \
+                and self.__validate(relation, ['_id', 'target']):
+            self.__handle_model_update(model_service.update_relation,
+                                       model_id=references['modelId'],
+                                       representation_id=references['modelRepresentationId'],
+                                       user_id=session['user']['_id'],
+                                       relation=relation)
+
+    def on_remove_model_relation(self, data):
+        self.__ensure_client_is_in_room()
+        if self.__validate(data, ['modelId', 'modelRepresentationId', 'relationId', 'deep']):
+            self.__handle_model_update(model_service.delete_relation,
+                                       model_id=data['modelId'],
+                                       representation_id=data['modelRepresentationId'],
+                                       relation_id=data['relationId'],
+                                       deep=data['deep'],
+                                       user_id=session['user']['_id'])
 
     # TODO: Move to mongo_document_base in data module
     SOType = TypeVar('SOType', bound=SerializableObject)

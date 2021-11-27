@@ -1,5 +1,5 @@
 bidict==0.21.3
-bpr-uml-shared @ git+https://github.com/AronGreen/bpr-uml-shared.git@3c89b0ed340451c04935489a6f9c197c4a110b0c
+bpr-uml-shared @ git+https://github.com/AronGreen/bpr-uml-shared.git@10cf15a7c1f3b87d21e76aa5f1a51279513be0c9
 certifi==2021.10.8
 cffi==1.15.0
 charset-normalizer==2.0.7

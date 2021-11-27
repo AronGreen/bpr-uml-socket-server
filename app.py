@@ -1,5 +1,3 @@
-import time
-
 from flask import Flask, request
 from flask_socketio import SocketIO, emit, disconnect
 
