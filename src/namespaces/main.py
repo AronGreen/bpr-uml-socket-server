@@ -87,30 +87,27 @@ class MainNamespace(Namespace):
 
     def on_add_model_attribute(self, references, attribute):
         self.__ensure_client_is_in_room()
-        if self.__validate(references, ['modelId', 'modelRepresentationId']) \
+        if self.__validate(references, ['modelId']) \
                 and self.__validate_attribute(attribute):
             self.__handle_model_update(model_service.add_attribute,
                                        model_id=references['modelId'],
-                                       representation_id=references['modelRepresentationId'],
                                        user_id=session['user']['_id'],
                                        attribute=attribute)
 
     def on_remove_model_attribute(self, references):
         self.__ensure_client_is_in_room()
-        if self.__validate(references, ['modelId', 'modelRepresentationId', 'attributeId']):
+        if self.__validate(references, ['modelId', 'attributeId']):
             self.__handle_model_update(model_service.remove_attribute,
                                        model_id=references['modelId'],
-                                       representation_id=references['modelRepresentationId'],
                                        attribute_id=references['attributeId'],
                                        user_id=session['user']['_id'])
 
     def on_update_model_attribute(self, references, attribute):
         self.__ensure_client_is_in_room()
-        if self.__validate(references, ['modelId', 'modelRepresentationId']) \
+        if self.__validate(references, ['modelId']) \
                 and self.__validate_attribute(attribute):
             self.__handle_model_update(model_service.update_attribute,
                                        model_id=references['modelId'],
-                                       representation_id=references['modelRepresentationId'],
                                        user_id=session['user']['_id'],
                                        attribute=attribute)
 
@@ -126,11 +123,10 @@ class MainNamespace(Namespace):
 
     def on_update_model_relation(self, references, relation):
         self.__ensure_client_is_in_room()
-        if self.__validate(references, ['modelId', 'modelRepresentationId']) \
+        if self.__validate(references, ['modelId']) \
                 and self.__validate(relation, ['_id', 'target']):
             self.__handle_model_update(model_service.update_relation,
                                        model_id=references['modelId'],
-                                       representation_id=references['modelRepresentationId'],
                                        user_id=session['user']['_id'],
                                        relation=relation)
 

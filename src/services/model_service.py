@@ -79,9 +79,8 @@ def update_model_representation(data: dict) -> FullModelRepresentation:
 
 
 def add_attribute(model_id: MongoId,
-                  representation_id: MongoId,
                   user_id: MongoId,
-                  attribute: dict) -> FullModelRepresentation:
+                  attribute: dict) -> Model:
     attr = __construct_attribute(attribute)
     success = db.push(Collection.MODEL, ObjectId(model_id), 'attributes', attr.as_dict())
 
@@ -89,25 +88,23 @@ def add_attribute(model_id: MongoId,
         __add_to_history(model_id,
                          AddAttributeAction(item=attr, timestamp=str(datetime.utcnow()), userId=ObjectId(user_id)))
 
-        return get_full_model_representation(representation_id)
+        return get_model(model_id)
 
 
 def remove_attribute(model_id: MongoId,
-                     representation_id: MongoId,
                      attribute_id: MongoId,
-                     user_id: MongoId) -> FullModelRepresentation:
+                     user_id: MongoId) -> Model:
     success = db.pull(Collection.MODEL, ObjectId(model_id), 'attributes', {'_id': ObjectId(attribute_id)})
 
     if success:
         __add_to_history(model_id, RemoveAttributeAction(timestamp=str(datetime.utcnow()), userId=ObjectId(user_id),
                                                          itemId=ObjectId(attribute_id)))
-        return get_full_model_representation(representation_id)
+        return get_model(model_id)
 
 
 def update_attribute(model_id: MongoId,
-                     representation_id: MongoId,
                      user_id: MongoId,
-                     attribute: dict) -> FullModelRepresentation:
+                     attribute: dict) -> Model:
     if '_id' not in attribute:
         raise MissingPropertyException(prop='_id')
 
@@ -126,17 +123,16 @@ def update_attribute(model_id: MongoId,
                             field_query={'attributes._id': new_attr.id},
                             item=new_attr)
 
-        return get_full_model_representation(representation_id)
+        return get_model(model_id)
 
 
 def create_relation(model_id: MongoId,
                     representation_id: MongoId,
                     user_id: MongoId,
                     relation_target: MongoId) -> FullModelRepresentation:
-    relation = __construct_relation({'target': ObjectId(relation_target)})
-    success = db.push(Collection.MODEL, ObjectId(model_id), 'relations', relation.as_dict())
+    relation = __create_relation({'target': ObjectId(relation_target)}, model_id)
 
-    if success:
+    if relation is not None:
         relation_rep = RelationRepresentation.from_dict({'_id': ObjectId(), 'relationId': relation.id})
         db.push(Collection.MODEL_REPRESENTATION, ObjectId(representation_id), 'relations', relation_rep.as_dict())
 
@@ -147,9 +143,8 @@ def create_relation(model_id: MongoId,
 
 
 def update_relation(model_id: MongoId,
-                    representation_id: MongoId,
                     user_id: MongoId,
-                    relation: dict) -> FullModelRepresentation:
+                    relation: dict) -> Model:
     if '_id' not in relation:
         raise MissingPropertyException(prop='_id')
 
@@ -171,7 +166,7 @@ def update_relation(model_id: MongoId,
                      UpdateRelationAction(timestamp=str(datetime.utcnow()), userId=ObjectId(user_id), oldItem=old_rel,
                                           newItem=updated_rel))
 
-    return get_full_model_representation(representation_id)
+    return get_model(model_id)
 
 
 def delete_relation(model_id: MongoId,
@@ -216,6 +211,13 @@ def __construct_relation(d: dict) -> Relation:
         d['_id'] = ObjectId(d['_id'])
 
     return Relation.from_dict(d, True)
+
+
+def __create_relation(d: dict, model_id: MongoId) -> Relation:
+    relation = __construct_relation(d)
+    success = db.push(Collection.MODEL, ObjectId(model_id), 'relations', relation.as_dict())
+    if success:
+        return relation
 
 
 def __construct_relation_representation(d: dict) -> Relation:
