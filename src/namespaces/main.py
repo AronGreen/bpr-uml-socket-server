@@ -46,6 +46,10 @@ class MainNamespace(Namespace):
 
                 diagram_models = model_service.get_full_model_representations_for_diagram(diagram.id)
 
+                # TODO: turn history back on when we need it
+                for model in diagram_models:
+                    model.model['history'] = []
+
                 emit('all_diagram_models',
                      FullModelRepresentation.as_json_list(diagram_models))
 
@@ -161,6 +165,9 @@ class MainNamespace(Namespace):
         if result is None:
             emit('error', {'error_type': error_event})
             return
+        # TODO: Turn history back on when we start using it
+        if result.has_field('history'):
+            setattr(result, 'history', [])
         emit(success_event, result.as_json(), to=session['room'])
 
     @staticmethod
