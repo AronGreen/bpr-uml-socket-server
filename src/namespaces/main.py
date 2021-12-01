@@ -83,7 +83,7 @@ class MainNamespace(Namespace):
     def on_update_model_representation(self, data):
         self.__ensure_client_is_in_room()
         if self.__validate(data, ['_id', 'x', 'y', 'w', 'h']):
-            self.__handle_model_update(model_service.update_model_representation, data)
+            self.__handle_model_rep_update(model_service.update_model_representation, data)
 
     def on_add_model_attribute(self, references, attribute):
         self.__ensure_client_is_in_room()
@@ -115,11 +115,11 @@ class MainNamespace(Namespace):
         self.__ensure_client_is_in_room()
         if self.__validate(references, ['modelId', 'modelRepresentationId']) \
                 and self.__validate(relation, ['target']):
-            self.__handle_model_update(model_service.create_relation,
-                                       model_id=references['modelId'],
-                                       representation_id=references['modelRepresentationId'],
-                                       user_id=session['user']['_id'],
-                                       relation_target=relation['target'])
+            self.__handle_model_rep_update(model_service.create_relation,
+                                           model_id=references['modelId'],
+                                           representation_id=references['modelRepresentationId'],
+                                           user_id=session['user']['_id'],
+                                           relation_target=relation['target'])
 
     def on_update_model_relation(self, references, relation):
         self.__ensure_client_is_in_room()
@@ -133,12 +133,12 @@ class MainNamespace(Namespace):
     def on_remove_model_relation(self, data):
         self.__ensure_client_is_in_room()
         if self.__validate(data, ['modelId', 'modelRepresentationId', 'relationId', 'deep']):
-            self.__handle_model_update(model_service.delete_relation,
-                                       model_id=data['modelId'],
-                                       representation_id=data['modelRepresentationId'],
-                                       relation_id=data['relationId'],
-                                       deep=data['deep'],
-                                       user_id=session['user']['_id'])
+            self.__handle_model_rep_update(model_service.delete_relation,
+                                           model_id=data['modelId'],
+                                           representation_id=data['modelRepresentationId'],
+                                           relation_id=data['relationId'],
+                                           deep=data['deep'],
+                                           user_id=session['user']['_id'])
 
     # TODO: Move to mongo_document_base in data module
     SOType = TypeVar('SOType', bound=SerializableObject)
@@ -148,6 +148,9 @@ class MainNamespace(Namespace):
 
     def __handle_model_update(self, func: Callable[[Any], SOType], *args, **kwargs):
         self.__handle_model_change(func, 'model_updated', 'update_model_error', *args, **kwargs)
+
+    def __handle_model_rep_update(self, func: Callable[[Any], SOType], *args, **kwargs):
+        self.__handle_model_change(func, 'model_rep_updated', 'update_model_error', *args, **kwargs)
 
     @staticmethod
     def __handle_model_change(func: Callable[[Any], SOType], success_event: str, error_event: str, *args, **kwargs):
