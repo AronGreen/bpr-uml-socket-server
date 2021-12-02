@@ -84,10 +84,33 @@ class MainNamespace(Namespace):
                                     representation=representation,
                                     diagram=session['diagram'])
 
-    def on_update_model_representation(self, data):
+    def on_delete_model(self, model_data):
+        if self.__validate(model_data, ['modelId']):
+            affected_diagrams = diagram_service.get_diagrams_for_model(model_data['modelId'])
+            success = model_service.delete_model(model_data['modelId'])
+            if success:
+                rooms = [str(x.id) for x in affected_diagrams]
+                for room in rooms:
+                    emit('model_deleted', {'modelId': model_data['modelId']}, to=room)
+            else:
+                emit('error',
+                     {'error_type': 'deleteModelError', 'message': f'model not deleted, id: {model_data["modelId"]}'})
+
+    def on_delete_model_representation(self, model_data):
+        self.__ensure_client_is_in_room()
+        if self.__validate(model_data, ['modelRepresentationId']):
+            success = model_service.delete_model_rep(model_data['modelRepresentationId'])
+            if success:
+                emit('model_representation_deleted', model_data, to=session['room'])
+            else:
+                emit('error',
+                     {'error_type': 'deleteRepresentationError',
+                      'message': f'could not delete representation based on request: {str(model_data)}'})
+
+    def on_update_model_rep(self, data):
         self.__ensure_client_is_in_room()
         if self.__validate(data, ['_id', 'x', 'y', 'w', 'h']):
-            self.__handle_model_rep_update(model_service.update_model_representation, data)
+            self.__handle_model_rep_update(model_service.update_model_rep, data)
 
     def on_add_model_attribute(self, references, attribute):
         self.__ensure_client_is_in_room()
@@ -155,6 +178,11 @@ class MainNamespace(Namespace):
 
     def __handle_model_rep_update(self, func: Callable[[Any], SOType], *args, **kwargs):
         self.__handle_model_change(func, 'model_rep_updated', 'update_model_error', *args, **kwargs)
+
+    # def __handle_model_delete(self, func: Callable[[Any], SOType], *args, **kwargs):
+    #     result = func(*args, **kwargs)
+    #     if result:
+    #         rooms = diagram_service.get_diagrams_for_model()
 
     @staticmethod
     def __handle_model_change(func: Callable[[Any], SOType], success_event: str, error_event: str, *args, **kwargs):

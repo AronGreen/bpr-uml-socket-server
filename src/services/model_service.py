@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Union
+from typing import Union, List
 
 from bpr_data.models.diagram import Diagram
 from bpr_data.models.model import Model, ModelRepresentation, FullModelRepresentation, CreateModelAction, \
@@ -58,13 +58,43 @@ def create(model: dict, representation: dict, diagram: Diagram, user_id: MongoId
     return get_full_model_representation(created_representation.id)
 
 
+def delete_model(model_id: MongoId) -> bool:
+    __on_model_delete_cleanup(model_id)
+    return db.delete(Collection.MODEL, id=model_id)
+
+
+def delete_model_rep(representation_id: MongoId):
+    __on_model_rep_delete_cleanup([ObjectId(representation_id)])
+    return db.delete(Collection.MODEL_REPRESENTATION, id=representation_id)
+
+
+def __on_model_delete_cleanup(model_id: MongoId) -> None:
+    # delete cascade is partially handled in triggers, but we are at the limit for free tier, so here we go:
+    # delete diagram.models affected
+    rep_ids = [r.id for r in db.find(Collection.MODEL_REPRESENTATION, ModelRepresentation, modelId=ObjectId(model_id))]
+    __on_model_rep_delete_cleanup(rep_ids)
+    # diagrams = db.find(Collection.DIAGRAM, Diagram, models={'$in': representation_ids})
+    # for diagram in diagrams:
+    #     for rep in representation_ids:
+    #         db.pull(Collection.DIAGRAM, diagram.id, 'models', rep)
+
+
+def __on_model_rep_delete_cleanup(rep_ids: List[ObjectId]) -> None:
+    # delete cascade is partially handled in triggers, but we are at the limit for free tier, so here we go:
+    # delete diagram.models affected
+    diagrams = db.find(Collection.DIAGRAM, Diagram, models={'$in': rep_ids})
+    for diagram in diagrams:
+        for rep in rep_ids:
+            db.pull(Collection.DIAGRAM, diagram.id, 'models', rep)
+
+
 def add_to_diagram(model_id: str | ObjectId, representation: dict, diagram: Diagram) -> FullModelRepresentation:
     model = get_model(model_id)
     created_representation = __create_representation(representation, model.id, diagram.id)
     return get_full_model_representation(created_representation.id)
 
 
-def update_model_representation(data: dict) -> FullModelRepresentation:
+def update_model_rep(data: dict) -> FullModelRepresentation:
     if 'modelId' not in data or 'diagramId' not in data:
         ref_model = db.find_one(Collection.MODEL_REPRESENTATION, id=data['_id'])
         data['modelId'] = ref_model['modelId']
