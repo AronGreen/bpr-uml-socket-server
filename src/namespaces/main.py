@@ -96,12 +96,12 @@ class MainNamespace(Namespace):
                 emit('error',
                      {'error_type': 'deleteModelError', 'message': f'model not deleted, id: {model_data["modelId"]}'})
 
-    def on_delete_model_representation(self, model_data):
+    def on_delete_model_rep(self, model_data):
         self.__ensure_client_is_in_room()
-        if self.__validate(model_data, ['modelRepresentationId']):
-            success = model_service.delete_model_rep(model_data['modelRepresentationId'])
+        if self.__validate(model_data, ['modelRepId']):
+            success = model_service.delete_model_rep(model_data['modelRepId'])
             if success:
-                emit('model_representation_deleted', model_data, to=session['room'])
+                emit('model_rep_deleted', model_data, to=session['room'])
             else:
                 emit('error',
                      {'error_type': 'deleteRepresentationError',
@@ -140,11 +140,11 @@ class MainNamespace(Namespace):
 
     def on_create_model_relation(self, references, relation):
         self.__ensure_client_is_in_room()
-        if self.__validate(references, ['modelId', 'modelRepresentationId']) \
+        if self.__validate(references, ['modelId', 'modelRepId']) \
                 and self.__validate(relation, ['target']):
             self.__handle_model_rep_update(model_service.create_relation,
                                            model_id=references['modelId'],
-                                           representation_id=references['modelRepresentationId'],
+                                           representation_id=references['modelRepId'],
                                            user_id=session['user']['_id'],
                                            relation_target=relation['target'])
 
@@ -159,10 +159,10 @@ class MainNamespace(Namespace):
 
     def on_remove_model_relation(self, data):
         self.__ensure_client_is_in_room()
-        if self.__validate(data, ['modelId', 'modelRepresentationId', 'relationId', 'deep']):
+        if self.__validate(data, ['modelId', 'modelRepId', 'relationId', 'deep']):
             self.__handle_model_rep_update(model_service.delete_relation,
                                            model_id=data['modelId'],
-                                           representation_id=data['modelRepresentationId'],
+                                           representation_id=data['modelRepId'],
                                            relation_id=data['relationId'],
                                            deep=data['deep'],
                                            user_id=session['user']['_id'])
@@ -178,11 +178,6 @@ class MainNamespace(Namespace):
 
     def __handle_model_rep_update(self, func: Callable[[Any], SOType], *args, **kwargs):
         self.__handle_model_change(func, 'model_rep_updated', 'update_model_error', *args, **kwargs)
-
-    # def __handle_model_delete(self, func: Callable[[Any], SOType], *args, **kwargs):
-    #     result = func(*args, **kwargs)
-    #     if result:
-    #         rooms = diagram_service.get_diagrams_for_model()
 
     @staticmethod
     def __handle_model_change(func: Callable[[Any], SOType], success_event: str, error_event: str, *args, **kwargs):
