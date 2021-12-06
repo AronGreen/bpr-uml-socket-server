@@ -146,7 +146,7 @@ class MainNamespace(Namespace):
                                            model_id=references['modelId'],
                                            representation_id=references['modelRepId'],
                                            user_id=session['user']['_id'],
-                                           relation_target=relation['target'])
+                                           relation=relation)
 
     def on_update_model_relation(self, references, relation):
         self.__ensure_client_is_in_room()

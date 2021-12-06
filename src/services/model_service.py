@@ -159,14 +159,14 @@ def update_attribute(model_id: MongoId,
 def create_relation(model_id: MongoId,
                     representation_id: MongoId,
                     user_id: MongoId,
-                    relation_target: MongoId) -> FullModelRepresentation:
-    relation = __create_relation({'target': ObjectId(relation_target)}, model_id)
+                    relation: dict) -> FullModelRepresentation:
+    rel = __create_relation(relation, model_id)
 
-    if relation is not None:
-        relation_rep = RelationRepresentation.from_dict({'_id': ObjectId(), 'relationId': relation.id})
+    if rel is not None:
+        relation_rep = RelationRepresentation.from_dict({'_id': ObjectId(), 'relationId': rel.id})
         db.push(Collection.MODEL_REPRESENTATION, ObjectId(representation_id), 'relations', relation_rep.as_dict())
 
-        __add_to_history(model_id, CreateRelationAction(item=relation, timestamp=str(datetime.utcnow()),
+        __add_to_history(model_id, CreateRelationAction(item=rel, timestamp=str(datetime.utcnow()),
                                                         userId=ObjectId(user_id)))
 
         return get_full_model_representation(representation_id)
