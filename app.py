@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask
 from flask_socketio import SocketIO, emit, disconnect
 
 import settings
@@ -13,7 +13,7 @@ socket_io.on_namespace(MainNamespace(''))
 
 @app.route('/')
 def index():
-    return 'Hello, world! running on %s' % request.host
+    return 'Server is running!'
 
 
 @socket_io.on_error_default

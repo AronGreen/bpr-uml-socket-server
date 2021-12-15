@@ -17,10 +17,7 @@ class MainNamespace(Namespace):
     def on_connect(self):
         headers = {'Authorization': request.headers['Authorization']}
         response = requests.post(f'{settings.REST_DOMAIN}/users', headers=headers)
-        if response.status_code == 401:
-            print("Auth failed!", flush=True)
-            raise ConnectionRefusedError('unauthorized!')
-        else:
+        if response.status_code == 200:
             session['user'] = response.json()
             session['user']['id'] = str(session['user']['_id'])
             emit(
@@ -28,6 +25,12 @@ class MainNamespace(Namespace):
                 json.dumps({
                     'success': True,
                 }, default=str))
+        elif response.status_code == 401:
+            print("Auth failed!", flush=True)
+            raise ConnectionRefusedError('unauthorized!')
+        else:
+            print("Unknown connection error!", flush=True)
+            raise ConnectionRefusedError('unknown connection error!')
 
     def on_disconnect(self):
         emit('user_left',
@@ -35,7 +38,7 @@ class MainNamespace(Namespace):
              to=session['room'])
 
     def on_join_diagram(self, data):
-        if 'diagramId' in data:
+        if self.__validate(data, ['diagramId']):
             diagram = diagram_service.get_diagram(data['diagramId'])
 
             if diagram is not None:
@@ -45,10 +48,6 @@ class MainNamespace(Namespace):
                 join_room(session['room'])
 
                 diagram_models = model_service.get_full_model_representations_for_diagram(diagram.id)
-
-                # TODO: turn history back on when we need it
-                for model in diagram_models:
-                    model.model['history'] = []
 
                 emit('all_diagram_models',
                      FullModelRepresentation.as_json_list(diagram_models))
@@ -167,7 +166,6 @@ class MainNamespace(Namespace):
                                            deep=data['deep'],
                                            user_id=session['user']['_id'])
 
-    # TODO: Move to mongo_document_base in data module
     SOType = TypeVar('SOType', bound=SerializableObject)
 
     def __handle_model_add(self, func: Callable[[Any], SOType], *args, **kwargs):
@@ -188,9 +186,6 @@ class MainNamespace(Namespace):
         if result is None:
             emit('error', {'error_type': error_event})
             return
-        # TODO: Turn history back on when we start using it
-        if result.has_field('history'):
-            setattr(result, 'history', [])
         emit(success_event, result.as_json(), to=session['room'])
 
     @staticmethod
